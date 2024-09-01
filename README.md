@@ -20,5 +20,3 @@ Features include interactive input, support for multiple load cases, and matplot
 - Load vector calculation
 - Equation solving using SymPy
 - Result visualization with Matplotlib
-
-Ideal for structural engineering students and professionals looking to understand or apply FEM in beam analysis.
