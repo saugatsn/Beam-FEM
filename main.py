@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import re
 
 # Set the print options for NumPy arrays to show 3 decimal places
-np.set_printoptions(precision=3, suppress=True)
+# np.set_printoptions(precision=3, suppress=True)
 
 # Step 1: Get user input
 beam_length = float(input("Enter the total length of the beam (in meters): "))
@@ -64,11 +64,11 @@ for _ in range(num_loads):
         loads.append({'type': 'moment', 'value': moment_value, 'position': moment_position,'direction':moment_direction})
 
 # Display nodes
-print(f"Nodes (equal division): {np.round(nodes, 3)}")
+print(f"Nodes (equal division): {nodes}")
 
 # Step 2: Calculate element lengths
 element_lengths = np.diff(nodes)
-print(f"Element Lengths: {np.round(element_lengths, 3)}")
+print(f"Element Lengths: {element_lengths}")
 
 # Step 3: Generate stiffness matrices for each element
 EI = 1  # Placeholder for EI, results will be in terms of EI
@@ -83,8 +83,8 @@ for i, length in enumerate(element_lengths):
     ])
     stiffness_matrices.append(k)
     # Print each element's stiffness matrix
-    print(f"Stiffness Matrix for Element {i+1}:")
-    print(np.array2string(np.round(k, 3), separator=', '))  # Improved matrix printing with 3 decimals and converted to string for separation by comma
+    # print(f"Stiffness Matrix for Element {i+1}:")
+    # print(np.array2string(k, separator=', '))  # Improved matrix printing with 3 decimals and converted to string for separation by comma
 
 # Step 4: Assemble the global stiffness matrix
 global_matrix_size = 2 * num_nodes #Each node has 2 degrees of freedom assuming beam is inextensible
@@ -99,7 +99,7 @@ for i in range(num_elements):
             global_stiffness_matrix[indices[row], indices[col]] += k[row, col]
 
 print("Global Stiffness Matrix:")
-print(np.array2string(np.round(global_stiffness_matrix, 3), separator=', '))  # Improved matrix printing with 3 decimals
+print(np.array2string(global_stiffness_matrix, separator=', '))  
 
 # Step 5: Define the displacement vector [u] and force vector [F]
 displacement_vector = np.zeros(global_matrix_size, dtype=object) #object type because it has to hold a mix of string and symbolic data
@@ -249,14 +249,14 @@ for i in range(num_elements):
                 element_force_vector[2*(i+1)+1] += M_right
 
     element_force_vectors.append(element_force_vector)
-    print(f"Force Vector for Element {i+1}:")
-    print(np.array2string(np.round(element_force_vector, 3), separator=', '))
+    # print(f"Force Vector for Element {i+1}:")
+    # print(np.array2string(element_force_vector, separator=', '))
 
 # Sum up individual force vectors to get the overall force vector
 overall_force_vector = np.sum(element_force_vectors, axis=0)
 
-print("Overall Force Vector [F]:")
-print(np.array2string(np.round(overall_force_vector, 3), separator=', '))
+# print("Overall Force Vector [F]:")
+# print(np.array2string(overall_force_vector, separator=', '))
 
 print("Displacement Vector [u]:")
 print(displacement_vector)
@@ -296,8 +296,8 @@ equations = F - K * U
 unknowns = sp.solve(equations, dict=True)
 
 # Output the result
-print("Unknown Values: ")
-print(unknowns)
+print("\nUnknown Values: \n")
+# print(unknowns)
 
 unknowns_obj=unknowns[0]
 flat_unknowns = {str(key): value for key, value in unknowns_obj.items()}
@@ -305,70 +305,83 @@ flat_unknowns = {str(key): value for key, value in unknowns_obj.items()}
 # Output the new dictionary with string keys
 print(flat_unknowns)
 
-def convert_to_float(value):
-    # If the value is not a string, return it as is (assumed to be numeric)
-    if not isinstance(value, str):
-        return value
-    
-    # Use a regular expression to check if the entire string is a number
-    if re.fullmatch(r'-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?', value):
-        return float(value)
-    
-    # If the string contains non-numeric parts, return it as is
-    return value
 
-# Test the function with each value
-converted_displacement_vector = [convert_to_float(value) for value in displacement_vector]
-converted_force_vector = [convert_to_float(value) for value in final_force_vector]
+def process_force_vector(final_force_vector, flat_unknowns, global_matrix_size):
+    def evaluate_expression(expr, unknowns):
+        """Evaluate a string expression using sympy"""
+        if isinstance(expr, (int, float)):
+            return float(expr)
+        
+        expr = sp.sympify(expr)
+        symbols = expr.free_symbols
+        
+        # If the expression is just a single symbol, look it up in unknowns
+        if len(symbols) == 1 and str(list(symbols)[0]) in unknowns:
+            return float(unknowns[str(list(symbols)[0])])
+        
+        # Otherwise, substitute known values and evaluate
+        return float(expr.evalf(subs={str(s): unknowns.get(str(s), s) for s in symbols}))
 
+    r_values = []
+    m_values = []
 
-# Ensure all keys are treated as strings
+    for i in range(0, global_matrix_size, 2):
+        # Process reaction forces (R)
+        r_expr = final_force_vector[i]
+        r_value = evaluate_expression(r_expr, flat_unknowns)
+        r_values.append(r_value)
+
+        # Process moments (M)
+        m_expr = final_force_vector[i+1]
+        m_value = evaluate_expression(m_expr, flat_unknowns)
+        m_values.append(m_value)
+
+    return r_values, m_values
+
+# Process the force vector
+r_values, m_values = process_force_vector(final_force_vector, flat_unknowns, global_matrix_size)
+
+# Process displacement vector
 v_values = []
 theta_values = []
-r_values = []
-m_values = []
 
+for i in range(0, global_matrix_size, 2):
+    v_value = displacement_vector[i]
+    v_values.append(float(flat_unknowns.get(str(v_value), v_value)))
 
-# Iterate over displacement vector (u) and force vector (f)
-for i in range(global_matrix_size):
-    # Handle v and theta values from displacement vector
-    if i % 2 == 0:  # Even index for vertical displacement (v)
-        value = converted_displacement_vector[i]
-        if isinstance(value, (int, float)):  # Check if numeric
-            v_values.append(value)
-        else:
-            v_values.append(flat_unknowns.get(str(value), "Key not found"))  # Use str() and get() method
-    else:  # Odd index for rotation (theta)
-        value = converted_displacement_vector[i]
-        if isinstance(value, (int, float)):  # Check if numeric
-            theta_values.append(value)
-        else:
-            theta_values.append(flat_unknowns.get(str(value), "Key not found"))  # Use str() and get() method
-    
-    # Handle r and m values from force vector
-    if i % 2 == 0:  # Even index for reaction force (r)
-        value = converted_force_vector[i]
-        if isinstance(value, (int, float)):  # Check if numeric
-            r_values.append(value)
-        else:
-            r_values.append(flat_unknowns.get(str(value), "Key not found"))  # Use str() and get() method
-    else:  # Odd index for moment (m)
-        value = converted_force_vector[i]
-        if isinstance(value, (int, float)):  # Check if numeric
-            m_values.append(value)
-        else:
-            m_values.append(flat_unknowns.get(str(value), "Key not found"))  # Use str() and get() method
+    theta_value = displacement_vector[i+1]
+    theta_values.append(float(flat_unknowns.get(str(theta_value), theta_value)))
 
 # Output the separated arrays
-print("Vertical Displacements (v):", v_values)
-print("Rotations (theta):", theta_values)
-print("Reactions (r):", r_values)
-print("Moments (m):", m_values)
+# print("Vertical Displacements (v):", v_values)
+# print("Rotations (theta):", theta_values)
+# print("Reactions (r):", r_values)
+# print("Moments (m):", m_values)
+
+# Initialize shear_force arrayq0
+shear_force = []
+
+# Iterate over r_values to compute cumulative sum/difference for shear_force
+cumulative_sum = 0
+for value in r_values:
+    cumulative_sum += value
+    shear_force.append(cumulative_sum)
+
+# Initialize bending_moment array
+bending_moment = [-m_values[0]]  # Start with 0 at the first node
+
+# Calculate bending moment at each node
+for i in range(1, len(nodes)):
+    dx = nodes[i] - nodes[i-1]  # Distance between nodes
+    moment_at_node = bending_moment[i-1] + shear_force[i-1] * dx
+    bending_moment.append(moment_at_node)
+
 
 x_values = [i * element_length for i in range(num_elements + 1)]
 # Plotting Vertical Displacements (v)
 plt.figure(figsize=(10, 6))
 plt.plot(x_values, v_values, marker='o', label="Vertical Displacement (v)")
+plt.fill_between(x_values, v_values, color='skyblue', alpha=0.6)  # Shading
 plt.xlabel('Length along the beam (m)')
 plt.ylabel('Vertical Displacement (v)')
 plt.title('Vertical Displacements along the Beam')
@@ -379,6 +392,7 @@ plt.show()
 # Plotting Rotations (theta)
 plt.figure(figsize=(10, 6))
 plt.plot(x_values, theta_values, marker='o', label="Rotations (theta)")
+plt.fill_between(x_values, theta_values, color='lightcoral', alpha=0.6)  # Shading
 plt.xlabel('Length along the beam (m)')
 plt.ylabel('Rotation (theta)')
 plt.title('Rotations along the Beam')
@@ -388,9 +402,10 @@ plt.show()
 
 # Plotting Reactions (r)
 plt.figure(figsize=(10, 6))
-plt.plot(x_values, r_values, marker='o', label="Reactions (r)")
+plt.plot(x_values, shear_force, marker='o', label="Reactions (r)")
+plt.fill_between(x_values, shear_force, color='lightgreen', alpha=0.6)  # Shading
 plt.xlabel('Length along the beam (m)')
-plt.ylabel('Reaction (r)')
+plt.ylabel('Reaction (kN)')
 plt.title('Reactions along the Beam')
 plt.grid(True)
 plt.legend()
@@ -398,10 +413,13 @@ plt.show()
 
 # Plotting Moments (m)
 plt.figure(figsize=(10, 6))
-plt.plot(x_values, m_values, marker='o', label="Moments (m)")
+plt.plot(x_values, bending_moment, marker='o', label="Moments (m)")
+plt.fill_between(x_values, bending_moment, color='lightyellow', alpha=0.6)  # Shading
 plt.xlabel('Length along the beam (m)')
-plt.ylabel('Moment (m)')
+plt.ylabel('Moment (kNm)')
 plt.title('Moments along the Beam')
 plt.grid(True)
 plt.legend()
 plt.show()
+
+
