@@ -13,7 +13,7 @@ A Python script for analyzing beams using the Finite Element Method (FEM). This 
 
 Features include ability to solve indeterminate beams, interactive input, support for multiple load cases, and matplotlib visualizations of results.
 
-## Recommended: 100 number of elements or greater
+### Recommended: 100 number of elements or greater
 
 ## Key Components:
 - Stiffness matrix generation
