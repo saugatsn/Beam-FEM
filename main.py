@@ -15,26 +15,29 @@ num_nodes = num_elements + 1
 element_length = beam_length / num_elements
 nodes = np.linspace(0, beam_length, num_nodes)
 
-# Get support types
-supports = []
-intermediate_support = input(f"Are there any intermediate support(s)?(Yes/No): ").strip().lower()
-if (intermediate_support=="yes"):
-    for i in range(num_nodes):
-        support_type = input(f"Enter the type of support at node {i+1} (Fixed, Roller, Hinge, None): ").strip().lower()
-        supports.append(support_type)
-    # print(supports)
-elif (intermediate_support=="no"):
-    for i in range(num_nodes):
-        if (i==0):
-            support_type = input(f"Enter the type of support at node {i+1} (Fixed, Roller, Hinge, None): ").strip().lower()
-            supports.append(support_type)
-        elif(i<=num_nodes-2):
-            supports.append("none")
-        elif(i==(num_nodes-1)):
-            support_type = input(f"Enter the type of support at node {i+1} (Fixed, Roller, Hinge, None): ").strip().lower()
-            supports.append(support_type)
+supports = ["none"] * num_nodes
 
-# print(supports)
+# Get support types
+intermediate_support = input(f"Are there any intermediate support(s)? (Yes/No): ").strip().lower()
+
+# Get start and end supports
+supports[0] = input(f"Enter the type of support at the start (node 1) (Fixed, Roller, Hinge): ").strip().lower()
+supports[-1] = input(f"Enter the type of support at the end (node {num_nodes}) (Fixed, Roller, Hinge): ").strip().lower()
+
+if intermediate_support == "yes":
+    num_supports = int(input("Enter the number of intermediate supports: "))
+    
+    for _ in range(num_supports):
+        support_distance = float(input("Enter the distance of the intermediate support from the start (in meters): "))
+        support_type = input("Enter the type of support (Fixed, Roller, Hinge): ").strip().lower()
+
+        # Find the closest node
+        closest_node = np.argmin(np.abs(nodes - support_distance))
+
+        if nodes[closest_node] > support_distance and closest_node > 0:
+            closest_node -= 1
+        
+        supports[closest_node] = support_type
 
 # Get number of loads
 num_loads = int(input("Enter the number of loads: "))
@@ -198,18 +201,18 @@ for i in range(num_elements):
                 elif load_start > nodes[i] and load_end == nodes[i+1]:  # Case 6.
                     a1 = load_start
                     b1 = nodes[i+1]
-                    a=0
-                    b=b1-a1
+                    a=load_start-nodes[i]
+                    b=a+(b1-a1)
                 elif load_start > nodes[i] and load_end > nodes[i+1]:  # Case 7.
                     a1 = load_start
                     b1 = nodes[i+1]
-                    a=0
-                    b=b1-a1
+                    a=load_start-nodes[i]
+                    b=a+(b1-a1)
                 elif load_start > nodes[i] and load_end < nodes[i+1]:  # Case 8.
                     a1 = load_start
                     b1 = load_end
-                    a=0
-                    b=b1-a1
+                    a=load_start-nodes[i]
+                    b=a+(b1-a1)
                 # Calculate fixed-end moments and reactions for the segment
                 UDL_moment_A = abs((w / length**2) * ((length**2 / 2) * (b**2 - a**2) - (2 * length / 3) * (b**3 - a**3) + (1 / 4) * (b**4 - a**4)))
                 UDL_moment_B = abs((w / length**2) * ((length / 3) * (b**3 - a**3) - (1 / 4) * (b**4 - a**4)))
