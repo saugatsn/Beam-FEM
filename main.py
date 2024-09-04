@@ -21,8 +21,8 @@ supports = ["none"] * num_nodes
 intermediate_support = input(f"Are there any intermediate support(s)? (Yes/No): ").strip().lower()
 
 # Get start and end supports
-supports[0] = input(f"Enter the type of support at the start (node 1) (Fixed, Roller, Hinge): ").strip().lower()
-supports[-1] = input(f"Enter the type of support at the end (node {num_nodes}) (Fixed, Roller, Hinge): ").strip().lower()
+supports[0] = input(f"Enter the type of support at the start (node 1) (Fixed, Roller, Hinge, None): ").strip().lower()
+supports[-1] = input(f"Enter the type of support at the end (node {num_nodes}) (Fixed, Roller, Hinge, None): ").strip().lower()
 
 if intermediate_support == "yes":
     num_supports = int(input("Enter the number of intermediate supports: "))
@@ -71,7 +71,7 @@ print(f"Nodes (equal division): {nodes}")
 
 # Step 2: Calculate element lengths
 element_lengths = np.diff(nodes)
-print(f"Element Lengths: {element_lengths}")
+# print(f"Element Lengths: {element_lengths}")
 
 # Step 3: Generate stiffness matrices for each element
 EI = 1  # Placeholder for EI, results will be in terms of EI
@@ -136,22 +136,24 @@ for i in range(num_elements):
     for load in loads:
         if load['type'] == 'point':
             if nodes[i] <= load['position'] < nodes[i+1]:
-                L_left = load['position'] - nodes[i]
-                L_right = nodes[i+1] - load['position']
+                a = load['position'] - nodes[i]
+                b = nodes[i+1] - load['position']
                 length = nodes[i+1] - nodes[i]
-
-                F_left = abs((load['value'] * L_right**2) / (length**3 * (3 * L_left + L_right)))
-                F_right = abs((load['value'] * L_left**2) / (length**3 * (3 * L_right + L_left)))
-
-                M_left = abs((load['value'] * L_left * L_right**2) / (length**2))
-                M_right = abs((load['value'] * L_right * L_left**2) / (length**2))
-
+                
+                # Updated Reaction Formulas
+                F_left = abs(load['value'] * b**2 / length**3 * (length + 2*a))
+                F_right = abs(load['value'] * a**2 / length**3 * (length + 2*b))
+                
+                # Updated Moment Formulas
+                M_left = abs(load['value'] * a * b**2 / length**2)
+                M_right = abs(load['value'] * a**2 * b / length**2)
+                
                 if load['direction'] == 'down':
                     F_left = -F_left
                     F_right = -F_right
-                    M_left=-M_left
-                elif load['direction']=='up':
-                    M_right=-M_right
+                    M_left = -M_left
+                elif load['direction'] == 'up':
+                    M_right = -M_right
 
                 element_force_vector[2*i] += F_left
                 element_force_vector[2*i+1] += M_left
@@ -358,8 +360,8 @@ for i in range(0, global_matrix_size, 2):
 # Output the separated arrays
 # print("Vertical Displacements (v):", v_values)
 # print("Rotations (theta):", theta_values)
-# print("Reactions (r):", r_values)
-# print("Moments (m):", m_values)
+print("Reactions (r):", r_values)
+print("Moments (m):", m_values)
 
 # Initialize shear_force arrayq0
 shear_force = []
@@ -370,17 +372,41 @@ for value in r_values:
     cumulative_sum += value
     shear_force.append(cumulative_sum)
 
-# Initialize bending_moment array
-bending_moment = [-m_values[0]]  # Start with 0 at the first node
+# Initialize arrays for left and right bending moments
+bm_left = [0] * len(nodes)
+bm_right = [0] * len(nodes)
 
-# Calculate bending moment at each node
-for i in range(1, len(nodes)):
-    dx = nodes[i] - nodes[i-1]  # Distance between nodes
-    moment_at_node = bending_moment[i-1] + shear_force[i-1] * dx
-    bending_moment.append(moment_at_node)
+# Function to add external moments to bending moment calculations
+def add_external_moments(bm, loads):
+    for load in loads:
+        if load['type'] == 'moment':
+            # Find the nearest node index to the load's position
+            node_index = np.argmin(np.abs(nodes - load['position']))
+            # Consider anticlockwise moments as negative, clockwise as positive
+            moment_value = -load['value'] if load['direction'] == 'anticlockwise' else load['value']
+            bm[node_index] += moment_value
+    return bm
 
+# Calculate bending moments
+for i in range(len(nodes)):
+    # Left bending moment
+    if i > 0:
+        dx = nodes[i] - nodes[i-1]
+        bm_left[i] = bm_right[i-1] + shear_force[i-1] * dx
+
+    # Right bending moment starts the same as left
+    bm_right[i] = bm_left[i]
+
+    # Add support moment if present
+    if supports[i] == 'fixed':
+        bm_right[i] -= m_values[i]
+
+# Add external moments
+bm_right = add_external_moments(bm_right, loads)
 
 x_values = [i * element_length for i in range(num_elements + 1)]
+
+
 # Plotting Vertical Displacements (v)
 plt.figure(figsize=(10, 6))
 plt.plot(x_values, v_values, marker='o', label="Vertical Displacement (v)")
@@ -414,15 +440,28 @@ plt.grid(True)
 plt.legend()
 plt.show()
 
-# Plotting Moments (m)
+# Plotting Bending Moments
 plt.figure(figsize=(10, 6))
-plt.plot(x_values, bending_moment, marker='o', label="Moments (m)")
-plt.fill_between(x_values, bending_moment, color='lightyellow', alpha=0.6)  # Shading
+
+# Plot bending moments with correct connections
+for i in range(len(nodes) - 1):
+    plt.plot([nodes[i], nodes[i]], [bm_left[i], bm_right[i]], 'b-')  # Vertical line at each node
+    plt.plot([nodes[i], nodes[i+1]], [bm_right[i], bm_left[i+1]], 'r-')  # Connecting line between nodes
+
+# Plot markers for left and right bending moments
+plt.plot(nodes, bm_left, 'bo', label="BM Left", markersize=4)
+plt.plot(nodes, bm_right, 'ro', label="BM Right", markersize=4)
+
+# Fill between bending moment lines
+for i in range(len(nodes) - 1):
+    plt.fill_between([nodes[i], nodes[i+1]], 
+                     [bm_right[i], bm_left[i+1]], 
+                     color='lightyellow', alpha=0.8)
+
 plt.xlabel('Length along the beam (m)')
-plt.ylabel('Moment (kNm)')
-plt.title('Moments along the Beam')
+plt.ylabel('Bending Moment (kNm)')
+plt.title('Bending Moment Diagram')
 plt.grid(True)
 plt.legend()
 plt.show()
-
 
