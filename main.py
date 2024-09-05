@@ -3,68 +3,174 @@ import sympy as sp
 import matplotlib.pyplot as plt
 import re
 
-# Set the print options for NumPy arrays to show 3 decimal places
-# np.set_printoptions(precision=3, suppress=True)
+# Function to get valid float input
+def get_float_input(prompt):
+    while True:
+        try:
+            return float(input(prompt))
+        except ValueError:
+            print("Invalid input! Please enter a valid number.")
 
-# Step 1: Get user input
-beam_length = float(input("Enter the total length of the beam (in meters): "))
-num_elements = int(input("Enter the number of elements you want: "))
+# Function to get valid int input
+def get_int_input(prompt):
+    while True:
+        try:
+            return int(input(prompt))
+        except ValueError:
+            print("Invalid input! Please enter a valid integer.")
+
+# Function to confirm inputs with yes/no check
+def confirm_input(prompt):
+    while True:
+        response = input(prompt + " (Yes/No): ").strip().lower()
+        if response in ['yes', 'no']:
+            return response == 'yes'
+        else:
+            print("Please enter 'Yes' or 'No'.")
+
+# Function to get valid support type input
+def get_support_type_input(prompt):
+    valid_supports = ['fixed', 'roller', 'hinge', 'none']
+    while True:
+        support = input(prompt).strip().lower()
+        if support in valid_supports:
+            return support
+        else:
+            print(f"Invalid input! Please choose one of {valid_supports}.")
+
+# Function to get valid load type input
+def get_load_type_input(prompt):
+    valid_loads = ['point', 'udl', 'moment']
+    while True:
+        load_type = input(prompt).strip().lower()
+        if load_type in valid_loads:
+            return load_type
+        else:
+            print(f"Invalid input! Please choose one of {valid_loads}.")
+
+# Function to get valid load direction input
+def get_load_direction_input(prompt):
+    valid_directions = ['up', 'down']
+    while True:
+        direction = input(prompt).strip().lower()
+        if direction in valid_directions:
+            return direction
+        else:
+            print(f"Invalid input! Please choose one of {valid_directions}.")
+
+# Function to get valid moment direction input
+def get_moment_direction_input(prompt):
+    valid_directions = ['clockwise', 'anticlockwise']
+    while True:
+        direction = input(prompt).strip().lower()
+        if direction in valid_directions:
+            return direction
+        else:
+            print(f"Invalid input! Please choose one of {valid_directions}.")
+
+# Function to modify input values
+def modify_input(beam_length, num_elements, supports, loads, nodes):
+    while True:
+        print("\nSummary of current inputs:")
+        print(f"Beam Length: {beam_length}")
+        print(f"Number of Elements: {num_elements}")
+        print(f"Supports: {supports}")
+        print(f"Loads: {loads}")
+
+        if confirm_input("Is everything correct?"):
+            break  # Exit only if user confirms everything is correct
+        
+        # Ask user which input to change
+        to_change = input("What would you like to change? (supports, loads): ").strip().lower()
+
+        if to_change == 'supports':
+            node_to_change = get_int_input(f"Which node's support would you like to change (1-{len(supports)})? ") - 1
+            new_support = get_support_type_input(f"Enter the new support type for node {node_to_change + 1} (Fixed, Roller, Hinge, None): ")
+            supports[node_to_change] = new_support
+
+        elif to_change == 'loads':
+            print(f"Current loads: {loads}")
+            load_index = get_int_input(f"Which load would you like to change (1-{len(loads)})? ") - 1
+            load_type = get_load_type_input("Enter the new type of load (point/UDL/moment): ")
+            
+            if load_type == 'point':
+                load_value = get_float_input("Enter the new value of the point load (in kN): ")
+                load_direction = input("Enter the new direction of the load (up/down): ").strip().lower()
+                load_position = get_float_input("Enter the new position of the point load from the start of the beam: ")
+                loads[load_index] = {'type': 'point', 'value': load_value, 'direction': load_direction, 'position': load_position}
+            
+            elif load_type == 'udl':
+                load_value = get_float_input("Enter the new value of the UDL (in kN/m): ")
+                load_start = get_float_input("Enter the new start position of the UDL: ")
+                load_end = get_float_input("Enter the new end position of the UDL: ")
+                load_direction = input("Enter the new direction of the UDL (up/down): ").strip().lower()
+                loads[load_index] = {'type': 'udl', 'value': load_value, 'start': load_start, 'end': load_end, 'direction': load_direction}
+            
+            elif load_type == 'moment':
+                moment_value = get_float_input("Enter the new value of the moment (in kNm): ")
+                moment_direction = input("Enter the new direction of the moment (clockwise/anticlockwise): ").strip().lower()
+                moment_position = get_float_input("Enter the new position of the moment from the start of the beam: ")
+                moment_value = -moment_value if moment_direction == 'clockwise' else moment_value
+                loads[load_index] = {'type': 'moment', 'value': moment_value, 'position': moment_position, 'direction': moment_direction}
+
+    return beam_length, num_elements, supports, loads, nodes
+
+
+beam_length = get_float_input("Enter the total length of the beam (in meters): ")
+num_elements = get_int_input("Enter the number of elements you want: ")
 num_nodes = num_elements + 1
-
-# Determine node positions
 element_length = beam_length / num_elements
 nodes = np.linspace(0, beam_length, num_nodes)
 
 supports = ["none"] * num_nodes
+supports[0] = get_support_type_input(f"Enter the type of support at the start (node 1) (Fixed, Roller, Hinge, None): ")
+supports[-1] = get_support_type_input(f"Enter the type of support at the end (node {num_nodes}) (Fixed, Roller, Hinge, None): ")
 
-# Get support types
-intermediate_support = input(f"Are there any intermediate support(s)? (Yes/No): ").strip().lower()
-
-# Get start and end supports
-supports[0] = input(f"Enter the type of support at the start (node 1) (Fixed, Roller, Hinge, None): ").strip().lower()
-supports[-1] = input(f"Enter the type of support at the end (node {num_nodes}) (Fixed, Roller, Hinge, None): ").strip().lower()
-
-if intermediate_support == "yes":
-    num_supports = int(input("Enter the number of intermediate supports: "))
-    
+if confirm_input("Are there any intermediate supports?"):
+    num_supports = get_int_input("Enter the number of intermediate supports: ")
     for _ in range(num_supports):
-        support_distance = float(input("Enter the distance of the intermediate support from the start (in meters): "))
-        support_type = input("Enter the type of support (Fixed, Roller, Hinge): ").strip().lower()
-
-        # Find the closest node
+        support_distance = get_float_input("Enter the distance of the intermediate support from the start (in meters): ")
+        support_type = get_support_type_input("Enter the type of support (Fixed, Roller, Hinge): ")
         closest_node = np.argmin(np.abs(nodes - support_distance))
-
         if nodes[closest_node] > support_distance and closest_node > 0:
             closest_node -= 1
-        
         supports[closest_node] = support_type
 
-# Get number of loads
-num_loads = int(input("Enter the number of loads: "))
+num_loads = get_int_input("Enter the number of loads: ")
 loads = []
 
 for _ in range(num_loads):
-    load_type = input("Enter the type of load (point/UDL/moment): ").strip().lower()
+    load_type = get_load_type_input("Enter the type of load (point/UDL/moment): ")
     
     if load_type == 'point':
-        load_value = float(input("Enter the value of the point load (in kN): "))
-        load_direction = input("Enter the direction of the load (up/down): ").strip().lower()
-        load_position = float(input("Enter the position of the point load from the start of the beam: "))
+        load_value = get_float_input("Enter the value of the point load (in kN): ")
+        load_direction = get_load_direction_input("Enter the direction of the load (up/down): ")
+        load_position = get_float_input("Enter the position of the point load from the start of the beam: ")
         loads.append({'type': 'point', 'value': load_value, 'direction': load_direction, 'position': load_position})
     
     elif load_type == 'udl':
-        load_value = float(input("Enter the value of the UDL (in kN/m): "))
-        load_start = float(input("Enter the start position of the UDL: "))
-        load_end = float(input("Enter the end position of the UDL: "))
-        load_direction = input("Enter the direction of the UDL (up/down): ").strip().lower()
+        load_value = get_float_input("Enter the value of the UDL (in kN/m): ")
+        load_start = get_float_input("Enter the start position of the UDL: ")
+        load_end = get_float_input("Enter the end position of the UDL: ")
+        load_direction = get_load_direction_input("Enter the direction of the UDL (up/down): ")
         loads.append({'type': 'udl', 'value': load_value, 'start': load_start, 'end': load_end, 'direction': load_direction})
     
     elif load_type == 'moment':
-        moment_value = float(input("Enter the value of the moment (in kNm): "))
-        moment_direction = input("Enter the direction of the moment (clockwise/anticlockwise): ").strip().lower()
-        moment_position = float(input("Enter the position of the moment from the start of the beam: "))
+        moment_value = get_float_input("Enter the value of the moment (in kNm): ")
+        moment_direction = get_moment_direction_input("Enter the direction of the moment (clockwise/anticlockwise): ")
+        moment_position = get_float_input("Enter the position of the moment from the start of the beam: ")
         moment_value = -moment_value if moment_direction == 'clockwise' else moment_value
-        loads.append({'type': 'moment', 'value': moment_value, 'position': moment_position,'direction':moment_direction})
+        loads.append({'type': 'moment', 'value': moment_value, 'position': moment_position, 'direction': moment_direction})
+
+# Call modify_input function to allow changes
+beam_length, num_elements, supports, loads, nodes = modify_input(beam_length, num_elements, supports, loads, nodes)
+
+# Final setup
+print("\nFinal Beam Length:", beam_length)
+print("Final Number of Elements:", num_elements)
+print("Supports:", supports)
+print("Loads:", loads)
+print("Nodes:", nodes)
 
 # Display nodes
 print("*" * 100)
