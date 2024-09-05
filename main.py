@@ -171,52 +171,21 @@ for i in range(num_elements):
             
             # Determine if load affects the current element
             if load_start < nodes[i+1] and load_end > nodes[i]:
-                # Determine 'a' and 'b' within the current element
-                if load_start < nodes[i] and load_end == nodes[i+1]:  # Case 2.
-                    a1 = nodes[i]
-                    b1 = nodes[i+1]
-                    a=0
-                    b=b1-a1
-                elif load_start < nodes[i] and load_end > nodes[i+1]:  # Case 1.
-                    a1 = nodes[i]
-                    b1 = nodes[i+1]
-                    a=0
-                    b=b1-a1
-                elif load_start < nodes[i] and load_end < nodes[i+1]:  # Case 3.
-                    a1 = nodes[i]
-                    b1 = load_end
-                    a=0
-                    b=b1-a1
-                elif load_start == nodes[i] and load_end == nodes[i+1]:  # Case 4.
-                    a1 = nodes[i]
-                    b1 = nodes[i+1]
-                    a=0
-                    b=b1-a1
-                elif load_start == nodes[i] and load_end < nodes[i+1]:  # Case 5.
-                    a1 = nodes[i]
-                    b1 = load_end
-                    a=0
-                    b=b1-a1
-                elif load_start == nodes[i] and load_end > nodes[i+1]:  # Case 9
-                    a1 = nodes[i]
-                    b1 = nodes[i+1]
-                    a=0
-                    b=b1-a1
-                elif load_start > nodes[i] and load_end == nodes[i+1]:  # Case 6.
-                    a1 = load_start
-                    b1 = nodes[i+1]
-                    a=load_start-nodes[i]
-                    b=a+(b1-a1)
-                elif load_start > nodes[i] and load_end > nodes[i+1]:  # Case 7.
-                    a1 = load_start
-                    b1 = nodes[i+1]
-                    a=load_start-nodes[i]
-                    b=a+(b1-a1)
-                elif load_start > nodes[i] and load_end < nodes[i+1]:  # Case 8.
-                    a1 = load_start
-                    b1 = load_end
-                    a=load_start-nodes[i]
-                    b=a+(b1-a1)
+                a1 = max(load_start, nodes[i])
+                b1 = min(load_end, nodes[i+1])
+                
+                # Calculate 'a'
+                if load_start > nodes[i]:
+                    a = a1 - nodes[i]
+                else:
+                    a = 0
+                
+                # Calculate 'b'
+                if load_start > nodes[i]:
+                    b = a + (b1 - a1)
+                else:
+                    b = b1 - a1
+
                 # Calculate fixed-end moments and reactions for the segment
                 UDL_moment_A = abs((w / length**2) * ((length**2 / 2) * (b**2 - a**2) - (2 * length / 3) * (b**3 - a**3) + (1 / 4) * (b**4 - a**4)))
                 UDL_moment_B = abs((w / length**2) * ((length / 3) * (b**3 - a**3) - (1 / 4) * (b**4 - a**4)))
