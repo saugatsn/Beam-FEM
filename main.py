@@ -67,6 +67,7 @@ for _ in range(num_loads):
         loads.append({'type': 'moment', 'value': moment_value, 'position': moment_position,'direction':moment_direction})
 
 # Display nodes
+print("*" * 100)
 print(f"Nodes (equal division): {nodes}")
 
 # Step 2: Calculate element lengths
@@ -101,6 +102,7 @@ for i in range(num_elements):
         for col in range(4):
             global_stiffness_matrix[indices[row], indices[col]] += k[row, col]
 
+print("*" * 100)
 print("Global Stiffness Matrix:")
 print(np.array2string(global_stiffness_matrix, separator=', '))  
 
@@ -262,7 +264,7 @@ overall_force_vector = np.sum(element_force_vectors, axis=0)
 
 # print("Overall Force Vector [F]:")
 # print(np.array2string(overall_force_vector, separator=', '))
-
+print("*" * 100)
 print("Displacement Vector [u]:")
 print(displacement_vector)
 
@@ -280,6 +282,7 @@ for i, support in enumerate(supports):
         force_vector[2*i] = f'R{i+1}'  # Symbolic reaction force, do not perform arithmetic
 final_force_vector=[]
 # Print final force vector considering supports
+print("*" * 100)
 print("Final Force Vector [F] after considering supports:")
 for i in range(global_matrix_size):
     force_component = f"{overall_force_vector[i]} {' ' if isinstance(force_vector[i], (int, float)) else'+'+force_vector[i]}"
@@ -301,7 +304,8 @@ equations = F - K * U
 unknowns = sp.solve(equations, dict=True)
 
 # Output the result
-print("\nUnknown Values: \n")
+print("*" * 100)
+print("Unknown Values: \n")
 # print(unknowns)
 
 unknowns_obj=unknowns[0]
@@ -369,11 +373,11 @@ sf_right = [0] * len(nodes)
 
 def calculate_load_at_point(x):
     total_load = 0
-    print(f"Calculating load at x = {x}:")
+    # print(f"Calculating load at x = {x}:")
     for load in loads:
         if load['type'] == 'point' and load['position'] < x:
             load_value = -load['value'] if load['direction'] == 'down' else load['value']
-            print(f"  Point load at position {load['position']} contributes: {load_value}")
+            # print(f"  Point load at position {load['position']} contributes: {load_value}")
             total_load += load_value
         elif load['type'] == 'udl':
             start = min(x, max(load['start'], 0))
@@ -381,9 +385,9 @@ def calculate_load_at_point(x):
             if end > start:
                 length = end - start
                 udl_value = load['value'] * length * (-1 if load['direction'] == 'down' else 1)
-                print(f"  UDL from {start} to {end} contributes: {udl_value} (Length = {length})")
+                # print(f"  UDL from {start} to {end} contributes: {udl_value} (Length = {length})")
                 total_load += udl_value
-    print(f"  Total load at x = {x}: {total_load}")
+    # print(f"  Total load at x = {x}: {total_load}")
     return total_load
 
 # Calculate shear forces
@@ -391,37 +395,37 @@ cumulative_load = 0
 cumulative_reaction = 0
 
 for i, node in enumerate(nodes):
-    print(f"\nNode {i+1} at position {node}:")
+    # print(f"\nNode {i+1} at position {node}:")
     
     # Calculate cumulative load up to this point for sf_left
     cumulative_load = calculate_load_at_point(node)
     
     # Calculate sf_left
     sf_left[i] = cumulative_reaction + cumulative_load
-    print(f"  Cumulative load up to node {node}: {cumulative_load}")
-    print(f"  Cumulative reaction up to node {node}: {cumulative_reaction}")
-    print(f"  SF Left before adding support: {sf_left[i]}")
+    # print(f"  Cumulative load up to node {node}: {cumulative_load}")
+    # print(f"  Cumulative reaction up to node {node}: {cumulative_reaction}")
+    # print(f"  SF Left before adding support: {sf_left[i]}")
 
     # Add support reaction to cumulative reaction if present at this node
     if supports[i] in ['fixed', 'roller', 'hinge']:
-        print(f"  Adding support reaction {r_values[i]} at node {node}")
+        # print(f"  Adding support reaction {r_values[i]} at node {node}")
         cumulative_reaction += r_values[i]
     
     # Calculate sf_right
     sf_right[i] = cumulative_reaction + cumulative_load
-    print(f"  SF Right before checking point loads: {sf_right[i]}")
+    # print(f"  SF Right before checking point loads: {sf_right[i]}")
     
     # Check for point load exactly at this node and add to sf_right
     for load in loads:
         if load['type'] == 'point' and load['position'] == node:
             load_value = -load['value'] if load['direction'] == 'down' else load['value']
-            print(f"  Point load exactly at node {node} contributes: {load_value}")
+            # print(f"  Point load exactly at node {node} contributes: {load_value}")
             sf_right[i] += load_value
     
-    print(f"  Updated SF Right: {sf_right[i]}")
+    # print(f"  Updated SF Right: {sf_right[i]}")
 
 # Print sf_right last value
-print(f"\nSF_right last value: {sf_right[-1]}")
+# print(f"\nSF_right last value: {sf_right[-1]}")
 
 # Plotting Shear Force
 plt.figure(figsize=(10, 6))
@@ -458,13 +462,13 @@ def find_closest_node(position, nodes):
 
 # Calculate bending moments
 for i, node in enumerate(nodes):
-    print(f"\nNode {i + 1} at position {node}:")
+    # print(f"\nNode {i + 1} at position {node}:")
     
     # Initialize arrays for bending moments at this node
     bm_left = 0
     bm_right = 0
     
-    print(f"Initial BM Left: {bm_left}, BM Right: {bm_right}")
+    # print(f"Initial BM Left: {bm_left}, BM Right: {bm_right}")
     
     # Add moments due to external moments
     for load in loads:
@@ -472,45 +476,44 @@ for i, node in enumerate(nodes):
             closest_node_idx = find_closest_node(load['position'], nodes)
             if closest_node_idx <(i):  # Only consider loads to the left
                 if load['direction'] == 'clockwise':
-                    print(f"Moment load at node {closest_node_idx + 1}: Adding {load['value']} clockwise to BM Right and BM Left")
+                    # print(f"Moment load at node {closest_node_idx + 1}: Adding {load['value']} clockwise to BM Right and BM Left")
                     bm_left+=abs(load['value'])
                     bm_right += abs(load['value'])
                 else:
-                    print(f"Moment load at node {closest_node_idx + 1}: Subtracting {load['value']} counterclockwise from BM Right and BM Left")
+                    # print(f"Moment load at node {closest_node_idx + 1}: Subtracting {load['value']} counterclockwise from BM Right and BM Left")
                     bm_left-=abs(load['value'])
                     bm_right -= abs(load['value'])
-                print(f"Updated BM Right: {bm_right}")
+                # print(f"Updated BM Right: {bm_right}")
             elif closest_node_idx == i:
                 if load['direction'] == 'clockwise':
-                    print(f"Moment load at node {closest_node_idx + 1}: Adding {load['value']} clockwise to BM Right and BM Left")
+                    # print(f"Moment load at node {closest_node_idx + 1}: Adding {load['value']} clockwise to BM Right and BM Left")
                     bm_right += abs(load['value'])
                 else:
-                    print(f"Moment load at node {closest_node_idx + 1}: Subtracting {load['value']} counterclockwise from BM Right")
+                    # print(f"Moment load at node {closest_node_idx + 1}: Subtracting {load['value']} counterclockwise from BM Right")
                     bm_right -= abs(load['value'])
 
-    
     # Add moments due to reaction forces from supports to the left
     for j in range(i):  # Only consider supports to the left of or at the current node
         support = supports[j]
         if support in ['fixed', 'roller', 'hinge']:
             distance = abs(nodes[j] - node)
             reaction_force = r_values[j]
-            print(f"Support {j + 1}: Reaction force = {reaction_force}, Distance = {distance}")
+            # print(f"Support {j + 1}: Reaction force = {reaction_force}, Distance = {distance}")
             moment = reaction_force * distance
-            print(f"Moment due to support = {reaction_force} * {distance} = {moment}")
+            # print(f"Moment due to support = {reaction_force} * {distance} = {moment}")
             bm_left += moment
             bm_right += moment
-            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
+            # print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
 
     # Add moments due to point loads to the left
     for load in loads:
         if load['type'] == 'point' and load['position'] < node:
             distance = node - load['position']
             moment = -load['value'] * distance if load['direction'] == 'down' else load['value'] * distance
-            print(f"Point load: Distance = {distance}, Moment = {load['value']} * {distance} = {moment}")
+            # print(f"Point load: Distance = {distance}, Moment = {load['value']} * {distance} = {moment}")
             bm_left += moment
             bm_right += moment
-            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
+            # print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
 
     # Add moments due to UDLs to the left
     for load in loads:
@@ -524,32 +527,32 @@ for i, node in enumerate(nodes):
             udl_moment = load['value'] * length * ((length / 2) + distance)
             direction_multiplier = -1 if load['direction'] == 'down' else 1
             udl_moment *= direction_multiplier
-            print(f"UDL: Length = {length}, Distance = {distance}, UDL Moment = {udl_moment}")
+            # print(f"UDL: Length = {length}, Distance = {distance}, UDL Moment = {udl_moment}")
             bm_left += udl_moment
             bm_right += udl_moment
-            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
+            # print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
 
     # Add induced moments at fixed supports at this node
     
     for k in range(i + 1):
         if supports[k] == 'fixed':
             if k < i:
-                print(f"Fixed support at node {k + 1}: Adding induced moment {m_values[k]} to both BM Left and BM Right")
+                # print(f"Fixed support at node {k + 1}: Adding induced moment {m_values[k]} to both BM Left and BM Right")
                 bm_left -= m_values[k]
                 bm_right -= m_values[k]
             else:  # k == i
-                print(f"Fixed support at node {i + 1}: Adding induced moment {m_values[k]} to BM Right only")
+                # print(f"Fixed support at node {i + 1}: Adding induced moment {m_values[k]} to BM Right only")
                 bm_right -= m_values[k]
-            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
+            # print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
 
     # Append bending moments to cumulative arrays
     cumulative_bm_left.append(bm_left)
     cumulative_bm_right.append(bm_right)
-    print(f"Final BM Left: {bm_left}, BM Right: {bm_right}")
+    # print(f"Final BM Left: {bm_left}, BM Right: {bm_right}")
 
 # Print bending moments for all nodes
-print("Bending Moments (Left):", cumulative_bm_left)
-print("Bending Moments (Right):", cumulative_bm_right)
+# print("Bending Moments (Left):", cumulative_bm_left)
+# print("Bending Moments (Right):", cumulative_bm_right)
 
 # Plotting Bending Moment Diagram
 plt.figure(figsize=(10, 6))
