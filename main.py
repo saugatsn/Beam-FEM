@@ -360,52 +360,223 @@ for i in range(0, global_matrix_size, 2):
 # Output the separated arrays
 # print("Vertical Displacements (v):", v_values)
 # print("Rotations (theta):", theta_values)
-print("Reactions (r):", r_values)
-print("Moments (m):", m_values)
+# print("Reactions (r):", r_values)
+# print("Moments (m):", m_values)
 
-# Initialize shear_force arrayq0
-shear_force = []
+# Initialize arrays for left and right shear forces
+sf_left = [0] * len(nodes)
+sf_right = [0] * len(nodes)
 
-# Iterate over r_values to compute cumulative sum/difference for shear_force
-cumulative_sum = 0
-for value in r_values:
-    cumulative_sum += value
-    shear_force.append(cumulative_sum)
-
-# Initialize arrays for left and right bending moments
-bm_left = [0] * len(nodes)
-bm_right = [0] * len(nodes)
-
-# Function to add external moments to bending moment calculations
-def add_external_moments(bm, loads):
+def calculate_load_at_point(x):
+    total_load = 0
+    print(f"Calculating load at x = {x}:")
     for load in loads:
-        if load['type'] == 'moment':
-            # Find the nearest node index to the load's position
-            node_index = np.argmin(np.abs(nodes - load['position']))
-            # Consider anticlockwise moments as negative, clockwise as positive
-            moment_value = -load['value'] if load['direction'] == 'anticlockwise' else load['value']
-            bm[node_index] += moment_value
-    return bm
+        if load['type'] == 'point' and load['position'] < x:
+            load_value = -load['value'] if load['direction'] == 'down' else load['value']
+            print(f"  Point load at position {load['position']} contributes: {load_value}")
+            total_load += load_value
+        elif load['type'] == 'udl':
+            start = min(x, max(load['start'], 0))
+            end = min(x, load['end'])
+            if end > start:
+                length = end - start
+                udl_value = load['value'] * length * (-1 if load['direction'] == 'down' else 1)
+                print(f"  UDL from {start} to {end} contributes: {udl_value} (Length = {length})")
+                total_load += udl_value
+    print(f"  Total load at x = {x}: {total_load}")
+    return total_load
+
+# Calculate shear forces
+cumulative_load = 0
+cumulative_reaction = 0
+
+for i, node in enumerate(nodes):
+    print(f"\nNode {i+1} at position {node}:")
+    
+    # Calculate cumulative load up to this point for sf_left
+    cumulative_load = calculate_load_at_point(node)
+    
+    # Calculate sf_left
+    sf_left[i] = cumulative_reaction + cumulative_load
+    print(f"  Cumulative load up to node {node}: {cumulative_load}")
+    print(f"  Cumulative reaction up to node {node}: {cumulative_reaction}")
+    print(f"  SF Left before adding support: {sf_left[i]}")
+
+    # Add support reaction to cumulative reaction if present at this node
+    if supports[i] in ['fixed', 'roller', 'hinge']:
+        print(f"  Adding support reaction {r_values[i]} at node {node}")
+        cumulative_reaction += r_values[i]
+    
+    # Calculate sf_right
+    sf_right[i] = cumulative_reaction + cumulative_load
+    print(f"  SF Right before checking point loads: {sf_right[i]}")
+    
+    # Check for point load exactly at this node and add to sf_right
+    for load in loads:
+        if load['type'] == 'point' and load['position'] == node:
+            load_value = -load['value'] if load['direction'] == 'down' else load['value']
+            print(f"  Point load exactly at node {node} contributes: {load_value}")
+            sf_right[i] += load_value
+    
+    print(f"  Updated SF Right: {sf_right[i]}")
+
+# Print sf_right last value
+print(f"\nSF_right last value: {sf_right[-1]}")
+
+# Plotting Shear Force
+plt.figure(figsize=(10, 6))
+
+# Plot shear forces with correct connections
+for i in range(len(nodes) - 1):
+    plt.plot([nodes[i], nodes[i]], [sf_left[i], sf_right[i]], 'b-')  # Vertical line at each node
+    plt.plot([nodes[i], nodes[i+1]], [sf_right[i], sf_left[i+1]], 'r-')  # Connecting line between nodes
+
+# Plot markers for left and right shear forces
+plt.plot(nodes, sf_left, 'bo', label="SF Left", markersize=4)
+plt.plot(nodes, sf_right, 'ro', label="SF Right", markersize=4)
+
+# Fill between shear force lines
+for i in range(len(nodes) - 1):
+    plt.fill_between([nodes[i], nodes[i+1]], 
+                     [sf_right[i], sf_left[i+1]], 
+                     color='lightblue', alpha=0.8)
+
+plt.xlabel('Length along the beam (m)')
+plt.ylabel('Shear Force (kN)')
+plt.title('Shear Force Diagram')
+plt.grid(True)
+plt.legend()
+plt.show()
+
+
+cumulative_bm_left = []
+cumulative_bm_right = []
+
+# Function to find the closest node
+def find_closest_node(position, nodes):
+    return np.argmin(np.abs(nodes - position))
 
 # Calculate bending moments
-for i in range(len(nodes)):
-    # Left bending moment
-    if i > 0:
-        dx = nodes[i] - nodes[i-1]
-        bm_left[i] = bm_right[i-1] + shear_force[i-1] * dx
+for i, node in enumerate(nodes):
+    print(f"\nNode {i + 1} at position {node}:")
+    
+    # Initialize arrays for bending moments at this node
+    bm_left = 0
+    bm_right = 0
+    
+    print(f"Initial BM Left: {bm_left}, BM Right: {bm_right}")
+    
+    # Add moments due to external moments
+    for load in loads:
+        if load['type'] == 'moment':
+            closest_node_idx = find_closest_node(load['position'], nodes)
+            if closest_node_idx <(i):  # Only consider loads to the left
+                if load['direction'] == 'clockwise':
+                    print(f"Moment load at node {closest_node_idx + 1}: Adding {load['value']} clockwise to BM Right and BM Left")
+                    bm_left+=abs(load['value'])
+                    bm_right += abs(load['value'])
+                else:
+                    print(f"Moment load at node {closest_node_idx + 1}: Subtracting {load['value']} counterclockwise from BM Right and BM Left")
+                    bm_left-=abs(load['value'])
+                    bm_right -= abs(load['value'])
+                print(f"Updated BM Right: {bm_right}")
+            elif closest_node_idx == i:
+                if load['direction'] == 'clockwise':
+                    print(f"Moment load at node {closest_node_idx + 1}: Adding {load['value']} clockwise to BM Right and BM Left")
+                    bm_right += abs(load['value'])
+                else:
+                    print(f"Moment load at node {closest_node_idx + 1}: Subtracting {load['value']} counterclockwise from BM Right")
+                    bm_right -= abs(load['value'])
 
-    # Right bending moment starts the same as left
-    bm_right[i] = bm_left[i]
+    
+    # Add moments due to reaction forces from supports to the left
+    for j in range(i):  # Only consider supports to the left of or at the current node
+        support = supports[j]
+        if support in ['fixed', 'roller', 'hinge']:
+            distance = abs(nodes[j] - node)
+            reaction_force = r_values[j]
+            print(f"Support {j + 1}: Reaction force = {reaction_force}, Distance = {distance}")
+            moment = reaction_force * distance
+            print(f"Moment due to support = {reaction_force} * {distance} = {moment}")
+            bm_left += moment
+            bm_right += moment
+            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
 
-    # Add support moment if present
-    if supports[i] == 'fixed':
-        bm_right[i] -= m_values[i]
+    # Add moments due to point loads to the left
+    for load in loads:
+        if load['type'] == 'point' and load['position'] < node:
+            distance = node - load['position']
+            moment = -load['value'] * distance if load['direction'] == 'down' else load['value'] * distance
+            print(f"Point load: Distance = {distance}, Moment = {load['value']} * {distance} = {moment}")
+            bm_left += moment
+            bm_right += moment
+            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
 
-# Add external moments
-bm_right = add_external_moments(bm_right, loads)
+    # Add moments due to UDLs to the left
+    for load in loads:
+        if load['type'] == 'udl' and load['start'] < node:
+            if node > load['end']:  # Node is beyond UDL
+                length = load['end'] - load['start']
+                distance = node - load['end']
+            else:  # Node is within the UDL
+                length = node - load['start']
+                distance = 0
+            udl_moment = load['value'] * length * ((length / 2) + distance)
+            direction_multiplier = -1 if load['direction'] == 'down' else 1
+            udl_moment *= direction_multiplier
+            print(f"UDL: Length = {length}, Distance = {distance}, UDL Moment = {udl_moment}")
+            bm_left += udl_moment
+            bm_right += udl_moment
+            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
+
+    # Add induced moments at fixed supports at this node
+    
+    for k in range(i + 1):
+        if supports[k] == 'fixed':
+            if k < i:
+                print(f"Fixed support at node {k + 1}: Adding induced moment {m_values[k]} to both BM Left and BM Right")
+                bm_left -= m_values[k]
+                bm_right -= m_values[k]
+            else:  # k == i
+                print(f"Fixed support at node {i + 1}: Adding induced moment {m_values[k]} to BM Right only")
+                bm_right -= m_values[k]
+            print(f"Updated BM Left: {bm_left}, BM Right: {bm_right}")
+
+    # Append bending moments to cumulative arrays
+    cumulative_bm_left.append(bm_left)
+    cumulative_bm_right.append(bm_right)
+    print(f"Final BM Left: {bm_left}, BM Right: {bm_right}")
+
+# Print bending moments for all nodes
+print("Bending Moments (Left):", cumulative_bm_left)
+print("Bending Moments (Right):", cumulative_bm_right)
+
+# Plotting Bending Moment Diagram
+plt.figure(figsize=(10, 6))
+
+# Plot bending moments with correct connections
+for i in range(len(nodes) - 1):
+    plt.plot([nodes[i], nodes[i]], [cumulative_bm_left[i], cumulative_bm_right[i]], 'b-')  # Vertical line at each node
+    plt.plot([nodes[i], nodes[i+1]], [cumulative_bm_right[i], cumulative_bm_left[i+1]], 'r-')  # Connecting line between nodes
+
+# Plot markers for left and right bending moments
+plt.plot(nodes, cumulative_bm_left, 'bo', label="BM Left", markersize=4)
+plt.plot(nodes, cumulative_bm_right, 'ro', label="BM Right", markersize=4)
+
+# Fill between bending moment lines
+for i in range(len(nodes) - 1):
+    plt.fill_between([nodes[i], nodes[i+1]], 
+                     [cumulative_bm_right[i], cumulative_bm_left[i+1]], 
+                     color='lightblue', alpha=0.8)
+
+plt.xlabel('Length along the beam (m)')
+plt.ylabel('Bending Moment (kNm)')
+plt.title('Bending Moment Diagram')
+plt.grid(True)
+plt.legend()
+plt.show()
 
 x_values = [i * element_length for i in range(num_elements + 1)]
-
 
 # Plotting Vertical Displacements (v)
 plt.figure(figsize=(10, 6))
@@ -425,42 +596,6 @@ plt.fill_between(x_values, theta_values, color='lightcoral', alpha=0.6)  # Shadi
 plt.xlabel('Length along the beam (m)')
 plt.ylabel('Rotation (theta)')
 plt.title('Rotations along the Beam')
-plt.grid(True)
-plt.legend()
-plt.show()
-
-# Plotting Reactions (r)
-plt.figure(figsize=(10, 6))
-plt.plot(x_values, shear_force, marker='o', label="Reactions (r)")
-plt.fill_between(x_values, shear_force, color='lightgreen', alpha=0.6)  # Shading
-plt.xlabel('Length along the beam (m)')
-plt.ylabel('Reaction (kN)')
-plt.title('Reactions along the Beam')
-plt.grid(True)
-plt.legend()
-plt.show()
-
-# Plotting Bending Moments
-plt.figure(figsize=(10, 6))
-
-# Plot bending moments with correct connections
-for i in range(len(nodes) - 1):
-    plt.plot([nodes[i], nodes[i]], [bm_left[i], bm_right[i]], 'b-')  # Vertical line at each node
-    plt.plot([nodes[i], nodes[i+1]], [bm_right[i], bm_left[i+1]], 'r-')  # Connecting line between nodes
-
-# Plot markers for left and right bending moments
-plt.plot(nodes, bm_left, 'bo', label="BM Left", markersize=4)
-plt.plot(nodes, bm_right, 'ro', label="BM Right", markersize=4)
-
-# Fill between bending moment lines
-for i in range(len(nodes) - 1):
-    plt.fill_between([nodes[i], nodes[i+1]], 
-                     [bm_right[i], bm_left[i+1]], 
-                     color='lightyellow', alpha=0.8)
-
-plt.xlabel('Length along the beam (m)')
-plt.ylabel('Bending Moment (kNm)')
-plt.title('Bending Moment Diagram')
 plt.grid(True)
 plt.legend()
 plt.show()
